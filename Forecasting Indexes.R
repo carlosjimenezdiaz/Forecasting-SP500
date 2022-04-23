@@ -1,7 +1,6 @@
 # Libraries that we need
 if (!require("tidyquant")) install.packages("tidyquant"); library(tidyquant)
 if (!require("tidyverse")) install.packages("tidyverse"); library(tidyverse)
-if (!require("RQuantLib")) install.packages("RQuantLib"); library(RQuantLib)
 
 # Local Variables
 Ticker      <- "^DJI" # ^GSPC -> SP500 Index / ^IXIC -> Nasdaq Index / ^DJI -> Downjones Index

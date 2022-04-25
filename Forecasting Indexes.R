@@ -6,8 +6,8 @@ if (!require("tidymodels")) install.packages("tidymodels"); library(tidymodels)
 if (!require("see")) install.packages("see"); library(see)
 
 # Local Variables
-Ticker      <- "^DJI" # ^GSPC -> SP500 Index / ^IXIC -> Nasdaq Index / ^DJI -> Downjones Index
-Ticker_Name <- "DownJones"
+Ticker      <- "GC=F" # ^GSPC -> SP500 Index / ^IXIC -> Nasdaq Index / ^DJI -> Downjones Index
+Ticker_Name <- "GOLD"
 top_years   <- 6 # How many highly correlated years wants to use to traing your models
 
 # Local Dataframes
@@ -202,14 +202,14 @@ for(i in 1:(db_correl_top$Year %>% length())){ # i <- 2
   
   # Saving Simulations
   db_simulations <- db_simulations %>%
-    bind_rows(data.frame(num_day  = y_pred %>% names() %>% as.numeric(),
+    bind_rows(data.frame(num_day  = y_pred %>% rownames() %>% as.numeric(),
                          Dis_Ret  = y_pred + Delta,
                          ID_Model = i))
 }
 
 # Validating the models (run this part manually analyzing each model)
 total_models <- (list.files("Data - Model Validation/") %>% length())/2
-which_model  <- 7 # Select the ID of the model (go to Data - Model Validation and see the final number of every file in with the following name: LM_Model_Features_XXX-rds)
+which_model  <- 2 # Select the ID of the model (go to Data - Model Validation and see the final number of every file in with the following name: LM_Model_Features_XXX-rds)
 
 if(which_model <= total_models){
   model <- readRDS(str_glue("Data - Model Validation/LM_Model_Features_{which_model}.rds"))  
@@ -228,55 +228,45 @@ First_Price <- db_yahoo_data %>%
   pull(1) %>%
   first()
 
-First_Date <- db_yahoo_data %>%
-  dplyr::filter(Year == lubridate::year(Sys.Date())) %>%
-  dplyr::select(date) %>%
-  pull(1) %>%
-  first()
+Last_Day_Training <- db_training %>% nrow() # Getting the Last Day in training set
 
-Last_Date <- db_yahoo_data %>%
-  dplyr::filter(Year == lubridate::year(Sys.Date())) %>%
-  dplyr::select(date) %>%
-  pull(1) %>%
-  last()
+db_simulations <- db_simulations %>% # Increasing in 1 the num_day column using the Last_Day_Training
+  as_tibble() %>%
+  dplyr::group_by(ID_Model) %>%
+  dplyr::mutate(num_day = num_day + Last_Day_Training) %>%
+  dplyr::ungroup()
 
   # Adapting historical database
   db_cYear_enhanced <- cYear %>%
-    dplyr::select(date, Dis_Ret) %>%
+    dplyr::select(num_day, Dis_Ret) %>%
     dplyr::mutate(ID_Model = 0)
   
   db_simulations_enhanced <- db_simulations %>%
-    dplyr::group_by(ID_Model) %>%
-    dplyr::mutate(num_day = 1:n()) %>%
-    dplyr::ungroup() %>%
-    dplyr::mutate(date = Last_Date + num_day) %>%
-    dplyr::select(c(date, Dis_Ret, ID_Model, -num_day)) %>%
-    dplyr::group_by(date) %>%
-    dplyr::summarise(min_Ret  = min(Dis_Ret),
-                     mean_Ret = mean(Dis_Ret),
-                     max_Ret  = max(Dis_Ret)) %>%
-    dplyr::filter(date < "2022-12-20")
+    dplyr::select(c(num_day, .pred, ID_Model)) %>%
+    dplyr::group_by(num_day) %>%
+    dplyr::summarise(min_Ret  = min(.pred),
+                     mean_Ret = mean(.pred),
+                     max_Ret  = max(.pred))
 
 db_cYear_enhanced %>%
-  ggplot(aes(x = date, y = Dis_Ret)) +
+  ggplot(aes(x = num_day, y = Dis_Ret)) +
   geom_line(colour = "darkgray", size = 0.8) +
-  geom_line(data = db_simulations_enhanced, aes(x = date, y = min_Ret), colour = "blue", linetype  = "dashed", size = 0.5) +
-  geom_line(data = db_simulations_enhanced, aes(x = date, y = mean_Ret), colour = "black", size = 0.8) +
-  geom_line(data = db_simulations_enhanced, aes(x = date, y = max_Ret), colour = "blue", linetype  = "dashed", size = 0.5) +
+  geom_line(data = db_simulations_enhanced, aes(x = num_day, y = min_Ret), colour = "blue", linetype  = "dashed", size = 0.5) +
+  geom_line(data = db_simulations_enhanced, aes(x = num_day, y = mean_Ret), colour = "black", size = 0.8) +
+  geom_line(data = db_simulations_enhanced, aes(x = num_day, y = max_Ret), colour = "blue", linetype  = "dashed", size = 0.5) +
   scale_y_continuous(labels = scales::percent) +
   labs(title    = str_glue("Future possible scenario of the {Ticker_Name}"),
        subtitle = "Using a Multiple Linear Regression Model.",
        caption  = "By: Carlos Jimenez",
-       x = "",
+       x = "Days in a Year",
        y = "Accumulated Return") +
   theme(legend.position = "none") + 
-  geom_vline(xintercept = Last_Date, 
+  geom_vline(xintercept = Last_Day_Training, 
              linetype   = "dotted", 
              color      = "black", 
              size       = 0.5) + 
   geom_hline(yintercept = 0, 
              linetype   = "dashed", 
              color      = "gray", 
-             size       = 0.5) + 
-  scale_x_date(date_labels = "%m-%d-%Y")
+             size       = 0.5) 
 

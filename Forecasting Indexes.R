@@ -255,7 +255,7 @@ db_cYear_enhanced %>%
   geom_line(data = db_simulations_enhanced, aes(x = num_day, y = mean_Ret), colour = "black", size = 0.8) +
   geom_line(data = db_simulations_enhanced, aes(x = num_day, y = max_Ret), colour = "blue", linetype  = "dashed", size = 0.5) +
   scale_y_continuous(labels = scales::percent) +
-  labs(title    = str_glue("Future possible scenario of the {Ticker_Name}"),
+  labs(title    = str_glue("Future possible scenario for {Ticker_Name}"),
        subtitle = "Using a Multiple Linear Regression Model.",
        caption  = "By: Carlos Jimenez",
        x = "Days in a Year",

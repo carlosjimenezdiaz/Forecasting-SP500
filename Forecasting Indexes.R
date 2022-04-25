@@ -1,6 +1,9 @@
 # Libraries that we need
 if (!require("tidyquant")) install.packages("tidyquant"); library(tidyquant)
 if (!require("tidyverse")) install.packages("tidyverse"); library(tidyverse)
+if (!require("performance")) install.packages("performance"); library(performance)
+if (!require("tidymodels")) install.packages("tidymodels"); library(tidymodels)
+if (!require("see")) install.packages("see"); library(see)
 
 # Local Variables
 Ticker      <- "^DJI" # ^GSPC -> SP500 Index / ^IXIC -> Nasdaq Index / ^DJI -> Downjones Index
@@ -132,7 +135,7 @@ data_chart %>%
   geom_line(data = filter(data_chart, Year != Sys.Date() %>% lubridate::year() %>% as.character()), size = 0.8, alpha = 0.5) + 
   geom_line(data = filter(data_chart, Year == Sys.Date() %>% lubridate::year() %>% as.character()), size = 1.1) +
   scale_y_continuous(labels = scales::percent) +
-  labs(title    = "Most correlated Past Year Performance and Current Year Performance. Ticker {Ticker}.",
+  labs(title    = str_glue("Most correlated Past Year Performance and Current Year Performance. Ticker {Ticker}."),
        subtitle = str_glue("Analysis done on the {Ticker_Name}"),
        caption  = "By: Carlos Jimenez",
        x = "Days in a Year",
@@ -164,9 +167,16 @@ for(i in 1:(db_correl_top$Year %>% length())){ # i <- 2
     na.omit() %>%
     dplyr::select(-num_day) %>%
     rename("Label" = lubridate::year(Sys.Date()) %>% as.character())
+
+  # Building the Linear Regression Models
+  MLRM_Model <- linear_reg() %>%
+    set_engine("lm") %>%
+    fit(Label ~ ., data = db_training)
   
-  MLRM_Model = lm(formula = Label ~ ., data = db_training)
-  
+    # Saving the data and the model for further analysis
+    saveRDS(db_training, str_glue("Data - Model Validation/Data_Model_Features_{hist_years %>% length()}.rds"))
+    saveRDS(MLRM_Model, str_glue("Data - Model Validation/LM_Model_Features_{hist_years %>% length()}.rds"))
+    
   # Predicting the Test set results
   db_test <- hYear %>%
     dplyr::filter(Year %in% db_correl_top$Year) %>%
@@ -179,7 +189,7 @@ for(i in 1:(db_correl_top$Year %>% length())){ # i <- 2
     dplyr::select(-c(lubridate::year(Sys.Date()) %>% as.character())) %>%
     na.omit()
   
-  y_pred = predict(MLRM_Model, newdata = db_test)
+  y_pred = predict(MLRM_Model, new_data = db_test)
   
   # Adjusting the forecast
   First_Forecast_Observation   <- y_pred %>% first()
@@ -192,6 +202,19 @@ for(i in 1:(db_correl_top$Year %>% length())){ # i <- 2
                          Dis_Ret  = y_pred + Delta,
                          ID_Model = i))
 }
+
+# Validating the models (run this part manually analyzing each model)
+total_models <- (list.files("Data - Model Validation/") %>% length())/2
+
+which_model <- 6 # Select the ID of the model (go to Data - Model Validation and see the final number of every file in with the following name: LM_Model_Features_XXX-rds)
+if(which_model <= total_models){
+  model <- readRDS(str_glue("Data - Model Validation/LM_Model_Features_{which_model}.rds"))  
+}else{
+  warning("That Model ID does not exist")
+}
+
+png(str_glue("Plots - Model analysis//Model_Validation_{which_model}_Features.png"), width=800, height=550)
+check_model(model)
 
 # Plotting the results
 First_Price <- db_yahoo_data %>%

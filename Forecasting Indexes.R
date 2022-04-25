@@ -14,6 +14,10 @@ top_years   <- 6 # How many highly correlated years wants to use to traing your 
 db_correl      <- NULL
 db_simulations <- NULL
 
+# Deleting all the graphs and models from previous analysis
+do.call(file.remove, list(list.files("Data - Model Validation/", full.names = TRUE)))
+do.call(file.remove, list(list.files("Plots - Model analysis/", full.names = TRUE)))
+
 # Getting historical data from Yahoo Finance
 db_yahoo_data <- tq_get(Ticker,
        from = Sys.Date() - lubridate::years(100),
@@ -205,16 +209,17 @@ for(i in 1:(db_correl_top$Year %>% length())){ # i <- 2
 
 # Validating the models (run this part manually analyzing each model)
 total_models <- (list.files("Data - Model Validation/") %>% length())/2
+which_model  <- 7 # Select the ID of the model (go to Data - Model Validation and see the final number of every file in with the following name: LM_Model_Features_XXX-rds)
 
-which_model <- 6 # Select the ID of the model (go to Data - Model Validation and see the final number of every file in with the following name: LM_Model_Features_XXX-rds)
 if(which_model <= total_models){
   model <- readRDS(str_glue("Data - Model Validation/LM_Model_Features_{which_model}.rds"))  
+  
+  png(str_glue("Plots - Model analysis/Model_Validation_{which_model}_Features.png"), width=800, height=550)
+  check_model(model)
+  dev.off()
 }else{
   warning("That Model ID does not exist")
-}
-
-png(str_glue("Plots - Model analysis//Model_Validation_{which_model}_Features.png"), width=800, height=550)
-check_model(model)
+}  
 
 # Plotting the results
 First_Price <- db_yahoo_data %>%

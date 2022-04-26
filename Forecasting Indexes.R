@@ -4,15 +4,18 @@ if (!require("tidyverse")) install.packages("tidyverse"); library(tidyverse)
 if (!require("performance")) install.packages("performance"); library(performance)
 if (!require("tidymodels")) install.packages("tidymodels"); library(tidymodels)
 if (!require("see")) install.packages("see"); library(see)
+if (!require("scales")) install.packages("scales"); library(scales)
 
 # Local Variables
-Ticker      <- "GC=F" # ^GSPC -> SP500 Index / ^IXIC -> Nasdaq Index / ^DJI -> Downjones Index
-Ticker_Name <- "GOLD"
-top_years   <- 6 # How many highly correlated years wants to use to traing your models
+Ticker      <- "^GSPC" # ^GSPC -> SP500 Index / ^IXIC -> Nasdaq Index / ^DJI -> Downjones Index
+Ticker_Name <- "SP500"
+Correlation_Limit <- 0.95 # Select all the years with a correlation higher than this limit
+Short_Term_Future <- 45   # Days into the future (Short-Term Forecasting)
 
 # Local Dataframes
-db_correl      <- NULL
-db_simulations <- NULL
+db_correl           <- NULL
+db_simulations      <- NULL
+warning_Correlation <- FALSE
 
 # Deleting all the graphs and models from previous analysis
 do.call(file.remove, list(list.files("Data - Model Validation/", full.names = TRUE)))
@@ -126,7 +129,16 @@ for(i in seq(hYear$Year %>% first(), (hYear$Year %>% last()) - 1, 1)){ # i <- 19
 # Getting the years with the most correlated performance vs current year
 db_correl_top <- db_correl %>%
   dplyr::arrange(desc(Corr)) %>%
-  dplyr::top_n(ifelse(top_years > 7, 7, top_years), wt = Corr)
+  dplyr::filter(Corr > Correlation_Limit)
+
+if(db_correl_top %>% nrow() == 0){ # If we dont meet the Correlation threshold, we select the top 5
+  
+  db_correl_top <- db_correl %>%
+    dplyr::arrange(desc(Corr)) %>%
+    dplyr::slice(1:5) 
+  
+  warning_Correlation <- TRUE
+}
 
 # Plotting the most correlated years vs current years
 data_chart <- hYear %>%
@@ -171,16 +183,16 @@ for(i in 1:(db_correl_top$Year %>% length())){ # i <- 2
     na.omit() %>%
     dplyr::select(-num_day) %>%
     rename("Label" = lubridate::year(Sys.Date()) %>% as.character())
-
+  
   # Building the Linear Regression Models
   MLRM_Model <- linear_reg() %>%
     set_engine("lm") %>%
     fit(Label ~ ., data = db_training)
   
-    # Saving the data and the model for further analysis
-    saveRDS(db_training, str_glue("Data - Model Validation/Data_Model_Features_{hist_years %>% length()}.rds"))
-    saveRDS(MLRM_Model, str_glue("Data - Model Validation/LM_Model_Features_{hist_years %>% length()}.rds"))
-    
+  # Saving the data and the model for further analysis
+  saveRDS(db_training, str_glue("Data - Model Validation/Data_Model_Features_{hist_years %>% length()}.rds"))
+  saveRDS(MLRM_Model, str_glue("Data - Model Validation/LM_Model_Features_{hist_years %>% length()}.rds"))
+  
   # Predicting the Test set results
   db_test <- hYear %>%
     dplyr::filter(Year %in% db_correl_top$Year) %>%
@@ -236,17 +248,17 @@ db_simulations <- db_simulations %>% # Increasing in 1 the num_day column using 
   dplyr::mutate(num_day = num_day + Last_Day_Training) %>%
   dplyr::ungroup()
 
-  # Adapting historical database
-  db_cYear_enhanced <- cYear %>%
-    dplyr::select(num_day, Dis_Ret) %>%
-    dplyr::mutate(ID_Model = 0)
-  
-  db_simulations_enhanced <- db_simulations %>%
-    dplyr::select(c(num_day, .pred, ID_Model)) %>%
-    dplyr::group_by(num_day) %>%
-    dplyr::summarise(min_Ret  = min(.pred),
-                     mean_Ret = mean(.pred),
-                     max_Ret  = max(.pred))
+# Adapting historical database
+db_cYear_enhanced <- cYear %>%
+  dplyr::select(num_day, Dis_Ret) %>%
+  dplyr::mutate(ID_Model = 0)
+
+db_simulations_enhanced <- db_simulations %>%
+  dplyr::select(c(num_day, .pred, ID_Model)) %>%
+  dplyr::group_by(num_day) %>%
+  dplyr::summarise(min_Ret  = min(.pred),
+                   mean_Ret = mean(.pred),
+                   max_Ret  = max(.pred))
 
 db_cYear_enhanced %>%
   ggplot(aes(x = num_day, y = Dis_Ret)) +
@@ -270,3 +282,36 @@ db_cYear_enhanced %>%
              color      = "gray", 
              size       = 0.5) 
 
+db_cYear_enhanced %>%
+  ggplot(aes(x = num_day, y = Dis_Ret)) +
+  geom_line(colour = "darkgray", size = 0.8) +
+  geom_line(data = db_simulations_enhanced %>% dplyr::slice(1:Short_Term_Future), aes(x = num_day, y = min_Ret), colour = "blue", linetype  = "dashed", size = 0.5) +
+  geom_line(data = db_simulations_enhanced %>% dplyr::slice(1:Short_Term_Future), aes(x = num_day, y = mean_Ret), colour = "black", size = 0.8) +
+  geom_line(data = db_simulations_enhanced %>% dplyr::slice(1:Short_Term_Future), aes(x = num_day, y = max_Ret), colour = "blue", linetype  = "dashed", size = 0.5) +
+  scale_y_continuous(labels = scales::percent) +
+  labs(title    = str_glue("Future possible scenario for {Ticker_Name} - Next {Short_Term_Future} days."),
+       subtitle = "Using a Multiple Linear Regression Model.",
+       caption  = "By: Carlos Jimenez",
+       x = "Days in a Year",
+       y = "Accumulated Return") +
+  theme(legend.position = "none") + 
+  geom_vline(xintercept = Last_Day_Training, 
+             linetype   = "dotted", 
+             color      = "black", 
+             size       = 0.5) + 
+  geom_hline(yintercept = 0, 
+             linetype   = "dashed", 
+             color      = "gray", 
+             size       = 0.5) 
+
+if(warning_Correlation){ # If we dont meet the Correlation threshold, we select the top 5
+  
+  Low_Limit_Correlation <- db_correl %>%
+    dplyr::arrange(desc(Corr)) %>%
+    dplyr::slice(5) %>%
+    dplyr::select(Corr) %>%
+    pull(1)
+    
+  cat("\14")
+  warning(str_glue("Your Correlation Limit is too high. The code adapt your Correlation limit to {round(Low_Limit_Correlation, digits = 4)} to see the top 5 most correlated years."))
+}

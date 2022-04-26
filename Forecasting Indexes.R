@@ -9,7 +9,7 @@ if (!require("scales")) install.packages("scales"); library(scales)
 # Local Variables
 Ticker      <- "^GSPC" # ^GSPC -> SP500 Index / ^IXIC -> Nasdaq Index / ^DJI -> Downjones Index
 Ticker_Name <- "SP500"
-Correlation_Limit <- 0.95 # Select all the years with a correlation higher than this limit
+Correlation_Limit <- 0.7 # Select all the years with a correlation higher than this limit
 Short_Term_Future <- 45   # Days into the future (Short-Term Forecasting)
 
 # Local Dataframes
@@ -131,7 +131,7 @@ db_correl_top <- db_correl %>%
   dplyr::arrange(desc(Corr)) %>%
   dplyr::filter(Corr > Correlation_Limit)
 
-if(db_correl_top %>% nrow() == 0){ # If we dont meet the Correlation threshold, we select the top 5
+if(db_correl_top %>% nrow() <= 3){ # If we dont meet the Correlation threshold, we select the top 5
   
   db_correl_top <- db_correl %>%
     dplyr::arrange(desc(Corr)) %>%

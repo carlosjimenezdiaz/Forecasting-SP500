@@ -12,6 +12,10 @@ Ticker_Name <- "Nasdaq"
 Correlation_Limit <- 0.6 # Select all the years with a correlation higher than this limit
 Short_Term_Future <- 45   # Days into the future (Short-Term Forecasting)
 
+# Forcing the model to use specific years
+Specific_Years <- FALSE
+Selected_Years <- c("1994", "2015", "2018", "2021")
+
 # Local Dataframes
 db_correl           <- NULL
 db_simulations      <- NULL
@@ -69,7 +73,7 @@ hYear %>%
   scale_color_manual(values = c("gray", "blue")) +
   scale_y_continuous(labels = scales::percent) +
   labs(title    = str_glue("Historical Performance of the {Ticker_Name} vs Current Year Performance. Ticker {Ticker}."),
-       subtitle = str_glue("Pattern detection and seasonality analysis. Analysis for the {cYear$date %>% tail(n = 1)}"),
+       subtitle = str_glue("Pattern detection and seasonality analysis. Date of the Analysis: {cYear$date %>% tail(n = 1)}"),
        caption  = "By: Carlos Jimenez",
        x = "Days in a Year",
        y = "Accumulated Return") +
@@ -92,7 +96,7 @@ hYear %>%
   geom_bar(stat = "identity") + 
   scale_color_manual(values = c("lightgray", "green")) +
   scale_y_continuous(labels = scales::percent) +
-  labs(title    = str_glue("What if Analysis: Historical Performance of the {Ticker_Name} vs Current Year Performance. Ticker {Ticker}."),
+  labs(title    = str_glue("Historical Performance of the {Ticker_Name} vs Current Year Performance. Ticker {Ticker}."),
        subtitle = str_glue("Today's YTD ({cYear$date %>% tail(n = 1)}) vs Historical Same Date."),
        caption  = "By: Carlos Jimenez",
        x = "",
@@ -103,14 +107,13 @@ hYear %>%
              size       = 1) + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
-
 # Analyzing the Beta Correlation level between past years performance and current year
 cYear_xts <- cYear %>% 
   dplyr::select(date, Dis_Ret) %>% 
   column_to_rownames(var = "date") %>% 
   as.xts()
 
-for(i in seq(hYear$Year %>% first(), (hYear$Year %>% last()) - 1, 1)){ # i <- 1932
+for(i in seq(hYear$Year %>% first(), (hYear$Year %>% last()), 1)){ # i <- 1932
   
   # Subsetting the Historical dataset by Year and by Number of days in cYear
   hYear_xts <- hYear %>% dplyr::filter(Year == i) %>% 
@@ -127,9 +130,14 @@ for(i in seq(hYear$Year %>% first(), (hYear$Year %>% last()) - 1, 1)){ # i <- 19
 }
 
 # Getting the years with the most correlated performance vs current year
-db_correl_top <- db_correl %>%
-  dplyr::arrange(desc(Corr)) %>%
-  dplyr::filter(Corr > Correlation_Limit)
+if(Specific_Years){
+  db_correl_top <- db_correl %>%
+    dplyr::filter(Year %in% Selected_Years)
+}else{
+  db_correl_top <- db_correl %>%
+    dplyr::arrange(desc(Corr)) %>%
+    dplyr::filter(Corr > Correlation_Limit)
+}
 
 if(db_correl_top %>% nrow() <= 3){ # If we dont meet the Correlation threshold, we select the top 5
   
@@ -151,7 +159,7 @@ data_chart %>%
   geom_line(data = filter(data_chart, Year != Sys.Date() %>% lubridate::year() %>% as.character()), size = 0.8, alpha = 0.5) + 
   geom_line(data = filter(data_chart, Year == Sys.Date() %>% lubridate::year() %>% as.character()), size = 1.1) +
   scale_y_continuous(labels = scales::percent) +
-  labs(title    = str_glue("Most correlated Past Year Performance and Current Year Performance. Ticker {Ticker}."),
+  labs(title    = str_glue("Most correlated Past Year Performance vs Current Year Performance. Ticker {Ticker}."),
        subtitle = str_glue("Analysis done on the {Ticker_Name}"),
        caption  = "By: Carlos Jimenez",
        x = "Days in a Year",
@@ -267,7 +275,7 @@ db_cYear_enhanced %>%
   geom_line(data = db_simulations_enhanced, aes(x = num_day, y = mean_Ret), colour = "black", size = 0.8) +
   geom_line(data = db_simulations_enhanced, aes(x = num_day, y = max_Ret), colour = "blue", linetype  = "dashed", size = 0.5) +
   scale_y_continuous(labels = scales::percent) +
-  labs(title    = str_glue("Future possible scenario for {Ticker_Name}"),
+  labs(title    = str_glue("Future possible scenario for the {Ticker_Name}"),
        subtitle = "Using a Multiple Linear Regression Model.",
        caption  = "By: Carlos Jimenez",
        x = "Days in a Year",
@@ -289,7 +297,7 @@ db_cYear_enhanced %>%
   geom_line(data = db_simulations_enhanced %>% dplyr::slice(1:Short_Term_Future), aes(x = num_day, y = mean_Ret), colour = "black", size = 0.8) +
   geom_line(data = db_simulations_enhanced %>% dplyr::slice(1:Short_Term_Future), aes(x = num_day, y = max_Ret), colour = "blue", linetype  = "dashed", size = 0.5) +
   scale_y_continuous(labels = scales::percent) +
-  labs(title    = str_glue("Future possible scenario for {Ticker_Name} - Next {Short_Term_Future} days."),
+  labs(title    = str_glue("Future possible scenario for the {Ticker_Name} - Next {Short_Term_Future} days."),
        subtitle = "Using a Multiple Linear Regression Model.",
        caption  = "By: Carlos Jimenez",
        x = "Days in a Year",

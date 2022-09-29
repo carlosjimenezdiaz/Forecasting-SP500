@@ -9,7 +9,7 @@ if (!require("scales")) install.packages("scales"); library(scales)
 # Local Variables
 Ticker      <- "^IXIC" # ^GSPC -> SP500 Index / ^IXIC -> Nasdaq Index / ^DJI -> Downjones Index
 Ticker_Name <- "Nasdaq"
-Correlation_Limit <- 0.6 # Select all the years with a correlation higher than this limit
+Correlation_Limit <- 0.75 # Select all the years with a correlation higher than this limit
 Short_Term_Future <- 45   # Days into the future (Short-Term Forecasting)
 
 # Forcing the model to use specific years
@@ -169,8 +169,7 @@ data_chart %>%
              color      = "darkgreen",  
              size       = 1) +
   theme(legend.position = "bottom",
-        legend.title    = element_blank()) +
-  scale_colour_manual(values=c("gray", "blue", "green", "black", "orange", "purple", "steelblue", "red"))
+        legend.title    = element_blank())
 
 # Training and forecasting multiple models (using multiple years as regressors)
 for(i in 1:(db_correl_top$Year %>% length())){ # i <- 2

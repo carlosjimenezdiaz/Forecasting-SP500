@@ -7,14 +7,14 @@ if (!require("see")) install.packages("see"); library(see)
 if (!require("scales")) install.packages("scales"); library(scales)
 
 # Local Variables
-Ticker      <- "^IXIC" # ^GSPC -> SP500 Index / ^IXIC -> Nasdaq Index / ^DJI -> Downjones Index
-Ticker_Name <- "Nasdaq"
+Ticker            <- "^GSPC" # ^GSPC -> SP500 Index / ^IXIC -> Nasdaq Index / ^DJI -> Downjones Index
+Ticker_Name       <- "SP500"
 Correlation_Limit <- 0.75 # Select all the years with a correlation higher than this limit
 Short_Term_Future <- 45   # Days into the future (Short-Term Forecasting)
 
 # Forcing the model to use specific years
 Specific_Years <- FALSE
-Selected_Years <- c("1994", "2015", "2018", "2021")
+Selected_Years <- c("2000", "2008")
 
 # Local Dataframes
 db_correl           <- NULL
@@ -139,13 +139,15 @@ if(Specific_Years){
     dplyr::filter(Corr > Correlation_Limit)
 }
 
-if(db_correl_top %>% nrow() <= 3){ # If we dont meet the Correlation threshold, we select the top 5
-  
-  db_correl_top <- db_correl %>%
-    dplyr::arrange(desc(Corr)) %>%
-    dplyr::slice(1:5) 
-  
-  warning_Correlation <- TRUE
+if(!Specific_Years){
+  if(db_correl_top %>% nrow() <= 3){ # If we dont meet the Correlation threshold, we select the top 5
+    
+    db_correl_top <- db_correl %>%
+      dplyr::arrange(desc(Corr)) %>%
+      dplyr::slice(1:7) 
+    
+    warning_Correlation <- TRUE
+  }
 }
 
 # Plotting the most correlated years vs current years
@@ -170,6 +172,19 @@ data_chart %>%
              size       = 1) +
   theme(legend.position = "bottom",
         legend.title    = element_blank())
+
+# Calculating Dynamic Correlation
+library(zoo)
+
+a <- data_chart %>%
+  dplyr::select(Year, Dis_Ret) %>%
+  pivot_wider(names_from = Year, values_from = Dis_Ret)
+
+rollapply(tsData, width=3, function(x) cor(x[,2],x[,3]), by.column=FALSE)
+
+
+
+
 
 # Training and forecasting multiple models (using multiple years as regressors)
 for(i in 1:(db_correl_top$Year %>% length())){ # i <- 2

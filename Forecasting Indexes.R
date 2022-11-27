@@ -7,8 +7,8 @@ if (!require("see")) install.packages("see"); library(see)
 if (!require("scales")) install.packages("scales"); library(scales)
 
 # Local Variables
-Ticker            <- "^GSPC" # ^GSPC -> SP500 Index / ^IXIC -> Nasdaq Index / ^DJI -> Downjones Index
-Ticker_Name       <- "SP500"
+Ticker            <- "^IXIC" # ^GSPC -> SP500 Index / ^IXIC -> Nasdaq Index / ^DJI -> Downjones Index
+Ticker_Name       <- "Nasdaq"
 Correlation_Limit <- 0.75 # Select all the years with a correlation higher than this limit
 Short_Term_Future <- 45   # Days into the future (Short-Term Forecasting)
 
@@ -66,6 +66,26 @@ hYear <- db_yahoo_data %>%
   dplyr::select(date, Year, Dis_Ret, col_line, num_day)
 
 # Plotting all the results
+  # Setting the coordinates for gtext
+  xText <- cYear %>% 
+    dplyr::filter(num_day == max(num_day)) %>%
+    dplyr::select(num_day) %>%
+    pull(1)
+  
+  if(xText > 220){
+    xText <- 220
+  }
+  
+  yText <- (cYear %>% 
+              dplyr::filter(num_day == max(num_day)) %>%
+              dplyr::select(Dis_Ret) %>%
+              pull(1)) + 0.05
+  
+  cPerformance <- cYear %>% 
+    dplyr::filter(num_day == max(num_day)) %>%
+    dplyr::select(Dis_Ret) %>%
+    pull(1)
+
 hYear %>%
   bind_rows(cYear) %>%
   ggplot(aes(x = num_day, y = Dis_Ret, colour = col_line, group = Year)) +
@@ -81,7 +101,9 @@ hYear %>%
   geom_hline(yintercept = 0, 
              linetype   = "dotted", 
              color      = "darkgreen",  
-             size       = 1)
+             linewidth  = 1) +
+  geom_text(x = xText, 
+            y = yText, label = str_glue("Current Year: {percent(cPerformance, accuracy = 0.01)}"))
 
 # Plotting the YTD return up to the date of the analysis
 hYear %>%
@@ -104,29 +126,42 @@ hYear %>%
   geom_hline(yintercept = cYear$Dis_Ret %>% tail(n = 1), 
              linetype   = "dotted", 
              color      = "blue",  
-             size       = 1) + 
+             linewidth       = 1) + 
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 
 # Analyzing the Beta Correlation level between past years performance and current year
-cYear_xts <- cYear %>% 
+cYear_corr <- cYear %>% 
   dplyr::select(date, Dis_Ret) %>% 
-  column_to_rownames(var = "date") %>% 
-  as.xts()
+  dplyr::mutate(date = 1:n(),
+                ID   = "Current")
+
+nDays_Current_Year <- cYear %>%
+  tail(n = 1) %>%
+  dplyr::select(num_day) %>%
+  pull(1)
 
 for(i in seq(hYear$Year %>% first(), (hYear$Year %>% last()), 1)){ # i <- 1932
   
   # Subsetting the Historical dataset by Year and by Number of days in cYear
-  hYear_xts <- hYear %>% dplyr::filter(Year == i) %>% 
-    dplyr::slice(1:nrow(cYear_xts)) %>% 
+  hYear_corr <- hYear %>% 
+    dplyr::filter(Year == i & num_day <= nDays_Current_Year) %>% 
     dplyr::select(date, Dis_Ret) %>% 
-    dplyr::mutate(date = index(cYear_xts)) %>%
-    column_to_rownames(var = "date") %>% 
-    as.xts()
+    dplyr::mutate(date = 1:n(),
+                  ID   = "Historical")
 
-  # Saving the info
+  # Matching the vectors
+  Corr_df <- hYear_corr %>%
+    dplyr::mutate(date = 1:n()) %>%
+    bind_rows(cYear_corr) %>%
+    pivot_wider(names_from = ID, values_from = Dis_Ret) %>%
+    na.omit()
+  
+  
+  # Calculating the Correlation
   db_correl <- db_correl %>%  
     bind_rows(data.frame(Year = i,
-                         Corr = PerformanceAnalytics::table.Correlation(cYear_xts, hYear_xts)$Correlation))
+                         Corr = cor(Corr_df$Historical, Corr_df$Current,  method = "pearson", use = "complete.obs")))
+  
 }
 
 # Getting the years with the most correlated performance vs current year
@@ -158,8 +193,8 @@ data_chart <- hYear %>%
 
 data_chart %>%
   ggplot(aes(x = num_day, y = Dis_Ret, colour = Year, group = Year)) +
-  geom_line(data = filter(data_chart, Year != Sys.Date() %>% lubridate::year() %>% as.character()), size = 0.8, alpha = 0.5) + 
-  geom_line(data = filter(data_chart, Year == Sys.Date() %>% lubridate::year() %>% as.character()), size = 1.1) +
+  geom_line(data = filter(data_chart, Year != Sys.Date() %>% lubridate::year() %>% as.character()), linewidth = 0.8, alpha = 0.5) + 
+  geom_line(data = filter(data_chart, Year == Sys.Date() %>% lubridate::year() %>% as.character()), linewidth = 1.1) +
   scale_y_continuous(labels = scales::percent) +
   labs(title    = str_glue("Most correlated Past Year Performance vs Current Year Performance. Ticker {Ticker}."),
        subtitle = str_glue("Analysis done on the {Ticker_Name}"),
@@ -169,21 +204,9 @@ data_chart %>%
   geom_hline(yintercept = 0, 
              linetype   = "dotted", 
              color      = "darkgreen",  
-             size       = 1) +
+             linewidth       = 1) +
   theme(legend.position = "bottom",
         legend.title    = element_blank())
-
-# Calculating Dynamic Correlation
-library(zoo)
-
-a <- data_chart %>%
-  dplyr::select(Year, Dis_Ret) %>%
-  pivot_wider(names_from = Year, values_from = Dis_Ret)
-
-rollapply(tsData, width=3, function(x) cor(x[,2],x[,3]), by.column=FALSE)
-
-
-
 
 
 # Training and forecasting multiple models (using multiple years as regressors)
@@ -243,11 +266,10 @@ for(i in 1:(db_correl_top$Year %>% length())){ # i <- 2
 
 # Validating the models (run this part manually analyzing each model)
 total_models <- (list.files("Data - Model Validation/") %>% length())/2
-which_model  <- 2 # Select the ID of the model (go to Data - Model Validation and see the final number of every file in with the following name: LM_Model_Features_XXX-rds)
+which_model  <- 5 # Select the ID of the model (go to Data - Model Validation and see the final number of every file in with the following name: LM_Model_Features_XXX-rds)
 
 if(which_model <= total_models){
   model <- readRDS(str_glue("Data - Model Validation/LM_Model_Features_{which_model}.rds"))  
-  
   png(str_glue("Plots - Model analysis/Model_Validation_{which_model}_Features.png"), width=800, height=550)
   check_model(model)
   dev.off()
@@ -284,10 +306,10 @@ db_simulations_enhanced <- db_simulations %>%
 
 db_cYear_enhanced %>%
   ggplot(aes(x = num_day, y = Dis_Ret)) +
-  geom_line(colour = "darkgray", size = 0.8) +
-  geom_line(data = db_simulations_enhanced, aes(x = num_day, y = min_Ret), colour = "blue", linetype  = "dashed", size = 0.5) +
-  geom_line(data = db_simulations_enhanced, aes(x = num_day, y = mean_Ret), colour = "black", size = 0.8) +
-  geom_line(data = db_simulations_enhanced, aes(x = num_day, y = max_Ret), colour = "blue", linetype  = "dashed", size = 0.5) +
+  geom_line(colour = "darkgray", linewidth = 0.8) +
+  geom_line(data = db_simulations_enhanced, aes(x = num_day, y = min_Ret), colour = "blue", linetype  = "dashed", linewidth = 0.5) +
+  geom_line(data = db_simulations_enhanced, aes(x = num_day, y = mean_Ret), colour = "black", linewidth = 0.8) +
+  geom_line(data = db_simulations_enhanced, aes(x = num_day, y = max_Ret), colour = "blue", linetype  = "dashed", linewidth = 0.5) +
   scale_y_continuous(labels = scales::percent) +
   labs(title    = str_glue("Future possible scenario for the {Ticker_Name}"),
        subtitle = "Using a Multiple Linear Regression Model.",
@@ -298,18 +320,18 @@ db_cYear_enhanced %>%
   geom_vline(xintercept = Last_Day_Training, 
              linetype   = "dotted", 
              color      = "black", 
-             size       = 0.5) + 
+             linewidth       = 0.5) + 
   geom_hline(yintercept = 0, 
              linetype   = "dashed", 
              color      = "gray", 
-             size       = 0.5) 
+             linewidth       = 0.5) 
 
 db_cYear_enhanced %>%
   ggplot(aes(x = num_day, y = Dis_Ret)) +
-  geom_line(colour = "darkgray", size = 0.8) +
-  geom_line(data = db_simulations_enhanced %>% dplyr::slice(1:Short_Term_Future), aes(x = num_day, y = min_Ret), colour = "blue", linetype  = "dashed", size = 0.5) +
-  geom_line(data = db_simulations_enhanced %>% dplyr::slice(1:Short_Term_Future), aes(x = num_day, y = mean_Ret), colour = "black", size = 0.8) +
-  geom_line(data = db_simulations_enhanced %>% dplyr::slice(1:Short_Term_Future), aes(x = num_day, y = max_Ret), colour = "blue", linetype  = "dashed", size = 0.5) +
+  geom_line(colour = "darkgray", linewidth = 0.8) +
+  geom_line(data = db_simulations_enhanced %>% dplyr::slice(1:Short_Term_Future), aes(x = num_day, y = min_Ret), colour = "blue", linetype  = "dashed", linewidth = 0.5) +
+  geom_line(data = db_simulations_enhanced %>% dplyr::slice(1:Short_Term_Future), aes(x = num_day, y = mean_Ret), colour = "black", linewidth = 0.8) +
+  geom_line(data = db_simulations_enhanced %>% dplyr::slice(1:Short_Term_Future), aes(x = num_day, y = max_Ret), colour = "blue", linetype  = "dashed", linewidth = 0.5) +
   scale_y_continuous(labels = scales::percent) +
   labs(title    = str_glue("Future possible scenario for the {Ticker_Name} - Next {Short_Term_Future} days."),
        subtitle = "Using a Multiple Linear Regression Model.",
@@ -320,11 +342,11 @@ db_cYear_enhanced %>%
   geom_vline(xintercept = Last_Day_Training, 
              linetype   = "dotted", 
              color      = "black", 
-             size       = 0.5) + 
+             linewidth       = 0.5) + 
   geom_hline(yintercept = 0, 
              linetype   = "dashed", 
              color      = "gray", 
-             size       = 0.5) 
+             linewidth       = 0.5) 
 
 if(warning_Correlation){ # If we dont meet the Correlation threshold, we select the top 5
   

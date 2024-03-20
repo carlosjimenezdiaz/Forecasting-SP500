@@ -7,7 +7,7 @@ if (!require("see")) install.packages("see"); library(see)
 if (!require("scales")) install.packages("scales"); library(scales)
 
 # Local Variables
-Ticker            <- "^IXIC" # ^GSPC -> SP500 Index / ^IXIC -> Nasdaq Index / ^DJI -> Downjones Index
+Ticker            <- "^GSPC" # ^GSPC -> SP500 Index / ^IXIC -> Nasdaq Index / ^DJI -> Downjones Index
 Ticker_Name       <- "Nasdaq"
 Correlation_Limit <- 0.75 # Select all the years with a correlation higher than this limit
 Short_Term_Future <- 45   # Days into the future (Short-Term Forecasting)

@@ -7,8 +7,8 @@ if (!require("see")) install.packages("see"); library(see)
 if (!require("scales")) install.packages("scales"); library(scales)
 
 # Local Variables
-Ticker            <- "^GSPC" # ^GSPC -> SP500 Index / ^IXIC -> Nasdaq Index / ^DJI -> Downjones Index
-Ticker_Name       <- "Nasdaq"
+Ticker            <- "^DJI" # ^GSPC -> SP500 Index / ^IXIC -> Nasdaq Index / ^DJI -> Downjones Index
+Ticker_Name       <- "Downjones Index"
 Correlation_Limit <- 0.75 # Select all the years with a correlation higher than this limit
 Short_Term_Future <- 45   # Days into the future (Short-Term Forecasting)
 
@@ -266,13 +266,15 @@ for(i in 1:(db_correl_top$Year %>% length())){ # i <- 2
 
 # Validating the models (run this part manually analyzing each model)
 total_models <- (list.files("Data - Model Validation/") %>% length())/2
-which_model  <- 5 # Select the ID of the model (go to Data - Model Validation and see the final number of every file in with the following name: LM_Model_Features_XXX-rds)
+which_model  <- 1 # Select the ID of the model (go to Data - Model Validation and see the final number of every file in with the following name: LM_Model_Features_XXX-rds)
 
 if(which_model <= total_models){
   model <- readRDS(str_glue("Data - Model Validation/LM_Model_Features_{which_model}.rds"))  
   png(str_glue("Plots - Model analysis/Model_Validation_{which_model}_Features.png"), width=800, height=550)
   check_model(model)
   dev.off()
+  
+  performance::check_model(model)
 }else{
   warning("That Model ID does not exist")
 }  
